@@ -30,7 +30,7 @@ def find_tests(root_dir_path):
             test_dir_paths.append(test_dir_path)
 
     print(f"Found {len(test_dir_paths)} tests")
-    return test_dir_paths
+    return sorted(test_dir_paths)
 
 
 def run_test(test_dir_path):
