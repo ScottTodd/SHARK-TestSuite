@@ -56,4 +56,4 @@ jobs:
       - name: "Testing with pytest"
         run: |
           source ${VENV_DIR}/bin/activate
-          pytest
+          pytest -rA
