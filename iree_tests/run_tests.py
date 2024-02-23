@@ -49,7 +49,7 @@ def run_test(test_dir_path):
         #     f"  {test_dir_path.name[5:]} run failed,\n    stdout: {ret.stdout},\n    stderr: {ret.stderr}",
         #     file=sys.stderr,
         # )
-        print(f"  {test_dir_path.name[5:]} run failed", file=sys.stderr)
+        # print(f"  {test_dir_path.name[5:]} run failed", file=sys.stderr)
         return False
 
     return True

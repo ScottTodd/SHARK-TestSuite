@@ -53,7 +53,7 @@ def compile_test(test_dir_path):
         #     f"  {test_dir_path.name[5:]} compile failed,\n    stdout: {ret.stdout},\n    stderr: {ret.stderr}",
         #     file=sys.stderr,
         # )
-        print(f"  {test_dir_path.name[5:]} compile failed", file=sys.stderr)
+        # print(f"  {test_dir_path.name[5:]} compile failed", file=sys.stderr)
         return False
 
     config_flagfile_path = test_dir_path / "config_cpu_flags.txt"
