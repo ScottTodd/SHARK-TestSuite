@@ -29,13 +29,13 @@ class IreeCompileAndRunTestSpec:
 
 def pytest_collect_file(parent, file_path):
     if file_path.name.endswith("model.mlir"):
-        print(f"Found model.mlir at '{file_path.parent.name}'")
+        # print(f"Found model.mlir at '{file_path.parent.name}'")
         return MlirFile.from_parent(parent, path=file_path)
 
 
 class MlirFile(pytest.File):
     def collect(self):
-        print(f"  MlirFile with path: '{self.path}'")
+        # print(f"  MlirFile with path: '{self.path}'")
 
         test_name = self.path.parent.name
 
@@ -71,8 +71,8 @@ class IreeCompileRunItem(pytest.Item):
         self.spec = spec
 
     def runtest(self):
-        print("Running test with spec:")
-        pprint(self.spec)
+        # print("Running test with spec:")
+        # pprint(self.spec)
 
         # TODO(scotttodd): output to a temp path
         # TODO(scotttodd): parameterize this name
