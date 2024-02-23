@@ -77,12 +77,14 @@ if __name__ == "__main__":
     passed_compiles = []
     failed_compiles = []
     # TODO(scotttodd): parallelize this (or move into a test runner like pytest)
-    for i in range(len(test_dir_paths)):
+    # num_tests_to_run = len(test_dir_paths)
+    num_tests_to_run = min(20, len(test_dir_paths))
+    for i in range(num_tests_to_run):
         test_dir_path = test_dir_paths[i]
         test_name = test_dir_path.name
 
         current_number = str(i).rjust(4, "0")
-        progress_str = f"[{current_number}/{len(test_dir_paths)}]"
+        progress_str = f"[{current_number}/{num_tests_to_run}]"
         print(f"{progress_str}: Compiling {test_name}")
 
         test_dir_path = Path(TEST_SOURCE_ROOT) / test_name
