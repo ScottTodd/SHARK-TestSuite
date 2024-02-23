@@ -12,6 +12,14 @@ on:
       - "iree_tests/**"
   workflow_dispatch:
 
+concurrency:
+  # A PR number if a pull request and otherwise the commit hash. This cancels
+  # queued and in-progress runs for the same PR (presubmit) or commit
+  # (postsubmit). The workflow name is prepended to avoid conflicts between
+  # different workflows.
+  group: ${{ github.workflow }}-${{ github.event.number || github.sha }}
+  cancel-in-progress: true
+
 jobs:
   linux_x86_64:
     name: Linux (x86_64)
@@ -42,14 +50,25 @@ jobs:
 
       - name: "Print baseline test results"
         run: |
-          echo "Baseline compile failures:"
+          echo -e "\n========================================================="
+          echo -e "Baseline compile failures:"
           cat iree_tests/onnx/node/compile_failures.txt
-          echo "Baseline compile successes:"
+          echo -e "\n========================================================="
+
+          echo -e "\n========================================================="
+          echo -e "Baseline compile successes:"
           cat iree_tests/onnx/node/compile_successes.txt
-          echo "Baseline run failures:"
+          echo -e "\n========================================================="
+
+          echo -e "\n========================================================="
+          echo -e "Baseline run failures:"
           cat iree_tests/onnx/node/run_failures.txt
-          echo "Baseline run successes:"
+          echo -e "\n========================================================="
+
+          echo -e "\n========================================================="
+          echo -e "Baseline run successes:"
           cat iree_tests/onnx/node/run_successes.txt
+          echo -e "\n========================================================="
 
       - name: "Test compilation"
         run: |
@@ -62,11 +81,22 @@ jobs:
 
       - name: "Print test results"
         run: |
-          echo "Tested compile failures:"
+          echo -e "\n========================================================="
+          echo -e "Tested compile failures:"
           cat iree_tests/onnx/node/compile_failures.txt
-          echo "Tested compile successes:"
+          echo -e "\n========================================================="
+
+          echo -e "\n========================================================="
+          echo -e "Tested compile successes:"
           cat iree_tests/onnx/node/compile_successes.txt
-          echo "Tested run failures:"
+          echo -e "\n========================================================="
+
+          echo -e "\n========================================================="
+          echo -e "Tested run failures:"
           cat iree_tests/onnx/node/run_failures.txt
-          echo "Tested run successes:"
+          echo -e "\n========================================================="
+
+          echo -e "\n========================================================="
+          echo -e "Tested run successes:"
           cat iree_tests/onnx/node/run_successes.txt
+          echo -e "\n========================================================="
