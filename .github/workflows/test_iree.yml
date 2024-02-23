@@ -53,57 +53,7 @@ jobs:
           source ${VENV_DIR}/bin/activate
           python3 -m pip install -r iree_tests/requirements.txt
 
-      # TODO(scotttodd): replace everything below here with pytest calls
-
-      - name: "Print baseline test results"
-        run: |
-          echo -e "\n========================================================="
-          echo -e "Baseline compile failures:"
-          cat iree_tests/onnx/node/compile_failures.txt
-          echo -e "\n========================================================="
-
-          echo -e "\n========================================================="
-          echo -e "Baseline compile successes:"
-          cat iree_tests/onnx/node/compile_successes.txt
-          echo -e "\n========================================================="
-
-          echo -e "\n========================================================="
-          echo -e "Baseline run failures:"
-          cat iree_tests/onnx/node/run_failures.txt
-          echo -e "\n========================================================="
-
-          echo -e "\n========================================================="
-          echo -e "Baseline run successes:"
-          cat iree_tests/onnx/node/run_successes.txt
-          echo -e "\n========================================================="
-
-      - name: "Test compilation"
+      - name: "Testing with pytest"
         run: |
           source ${VENV_DIR}/bin/activate
-          python iree_tests/compile_tests.py
-      - name: "Test running"
-        run: |
-          source ${VENV_DIR}/bin/activate
-          python iree_tests/run_tests.py
-
-      - name: "Print test results"
-        run: |
-          echo -e "\n========================================================="
-          echo -e "Tested compile failures:"
-          cat iree_tests/onnx/node/compile_failures.txt
-          echo -e "\n========================================================="
-
-          echo -e "\n========================================================="
-          echo -e "Tested compile successes:"
-          cat iree_tests/onnx/node/compile_successes.txt
-          echo -e "\n========================================================="
-
-          echo -e "\n========================================================="
-          echo -e "Tested run failures:"
-          cat iree_tests/onnx/node/run_failures.txt
-          echo -e "\n========================================================="
-
-          echo -e "\n========================================================="
-          echo -e "Tested run successes:"
-          cat iree_tests/onnx/node/run_successes.txt
-          echo -e "\n========================================================="
+          pytest
