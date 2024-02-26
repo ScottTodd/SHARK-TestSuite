@@ -27,8 +27,9 @@ class IreeCompileAndRunTestSpec:
     iree_compile_flags: str
     iree_run_module_flags: str
 
-    expect_compilation_success: bool
+    expect_compile_success: bool
     expect_run_success: bool
+    skip_run: bool
 
 
 def pytest_collect_file(parent, file_path):
@@ -52,16 +53,14 @@ class MlirFile(pytest.File):
 
         global _iree_test_configs
         for config in _iree_test_configs:
+            if test_name in config["skip_compile_tests"]:
+                continue
 
-            # TODO(scotttodd): load config file(s), populate one spec per config
-            #   (then join the config name with the test name)
-
-            expect_compilation_success = True
-            if test_name in config["expected_compile_failures"]:
-                expect_compilation_success = False
-            expect_run_success = True
-            if test_name in config["expected_run_failures"]:
-                expect_run_success = False
+            expect_compile_success = (
+                test_name not in config["expected_compile_failures"]
+            )
+            expect_run_success = test_name not in config["expected_run_failures"]
+            skip_run = test_name in config["skip_run_tests"]
 
             spec = IreeCompileAndRunTestSpec(
                 input_mlir_path=self.path,
@@ -69,8 +68,9 @@ class MlirFile(pytest.File):
                 config_name=config["config_name"],
                 iree_compile_flags=config["iree_compile_flags"],
                 iree_run_module_flags=config["iree_run_module_flags"],
-                expect_compilation_success=expect_compilation_success,
+                expect_compile_success=expect_compile_success,
                 expect_run_success=expect_run_success,
+                skip_run=skip_run,
             )
             yield IreeCompileRunItem.from_parent(self, name=test_name, spec=spec)
 
@@ -82,31 +82,60 @@ class IreeCompileRunItem(pytest.Item):
         super().__init__(**kwargs)
         self.spec = spec
 
+        # TODO(scotttodd): output to a temp path
+        vmfb_name = f"model_{self.spec.config_name}.vmfb"
+        self.compiled_model_path = self.spec.input_mlir_path.parent / vmfb_name
+
     def runtest(self):
         # print("Running test with spec:")
         # pprint(self.spec)
 
-        if not self.spec.expect_compilation_success:
-            pytest.xfail("Expected compilation to file")
+        # First test compilation...
+        if not self.spec.expect_compile_success:
+            pytest.xfail("Expected compilation to fail")
+        self.test_compile()
+        if not self.spec.expect_compile_success:
+            return
 
-        # TODO(scotttodd): output to a temp path
-        # TODO(scotttodd): parameterize this name
-        vmfb_name = f"model_{self.spec.config_name}.vmfb"
-        compiled_model_path = self.spec.input_mlir_path.parent / vmfb_name
+        if self.spec.skip_run:
+            return
+
+        # ... then test runtime execution
+        if not self.spec.expect_run_success:
+            pytest.xfail("Expected run to fail")
+        self.test_run()
+
+    def test_compile(self):
         exec_args = [
             "iree-compile",
             str(self.spec.input_mlir_path),
             "-o",
-            str(compiled_model_path),
+            str(self.compiled_model_path),
         ]
         exec_args.extend(self.spec.iree_compile_flags)
         process = subprocess.run(exec_args, capture_output=True)
         if process.returncode != 0:
             raise IreeCompileException(process)
 
+    def test_run(self):
+        exec_args = [
+            "iree-run-module",
+            f"--module={self.compiled_model_path}",
+            f"--flagfile={self.spec.data_flagfile_path}",
+        ]
+        exec_args.extend(self.spec.iree_run_module_flags)
+        # TODO(scotttodd): swap cwd for a temp path?
+        process = subprocess.run(
+            exec_args, capture_output=True, cwd=self.spec.data_flagfile_path.parent
+        )
+        if process.returncode != 0:
+            raise IreeRunException(process)
+
     def repr_failure(self, excinfo):
         """Called when self.runtest() raises an exception."""
         if isinstance(excinfo.value, IreeCompileException):
+            return "\n".join(excinfo.value.args)
+        if isinstance(excinfo.value, IreeRunException):
             return "\n".join(excinfo.value.args)
         return super().repr_failure(excinfo)
 
@@ -131,6 +160,25 @@ class IreeCompileException(Exception):
         )
 
 
+class IreeRunException(Exception):
+    """Runtime exception that preserves the command line and error output."""
+
+    def __init__(self, process: subprocess.CompletedProcess):
+        try:
+            errs = process.stderr.decode("utf-8")
+        except:
+            errs = str(process.stderr)  # Decode error or other: best we can do.
+
+        # TODO(scotttodd): log CWD as part of the reproducer
+        #   (flagfiles use relative paths like `@input_0.npy`)
+        super().__init__(
+            f"Error invoking iree-run-module\n"
+            f"Error code: {process.returncode}\n"
+            f"Stderr diagnostics:\n{errs}\n\n"
+            f"Invoked with:\n {' '.join(process.args)}\n\n"
+        )
+
+
 # TODO(scotttodd): move this setup code into a (scoped) function?
 #   Is there some way to share state across pytest functions?
 
@@ -139,6 +187,8 @@ class IreeCompileException(Exception):
 #     "config_name": str,
 #     "iree_compile_flags": list of str,
 #     "iree_run_module_flags": list of str,
+#     "skip_compile_tests": list of str,
+#     "skip_run_tests": list of str,
 #     "expected_compile_failures": list of str,
 #     "expected_run_failures": list of str
 #   }
@@ -148,6 +198,8 @@ class IreeCompileException(Exception):
 #     "config_name": "cpu",
 #     "iree_compile_flags": ["--iree-hal-target-backends=llvm-cpu"],
 #     "iree_run_module_flags": ["--device=local-task"],
+#     "skip_compile_tests": [],
+#     "skip_run_tests": [],
 #     "expected_compile_failures": ["test_abs"],
 #     "expected_run_failures": ["test_add"],
 #   }
