@@ -114,26 +114,44 @@ The 'node' tests are for individual ONNX operators. The 'light', 'real',
 
 Common venv setup with deps:
 
-```shell
+```bash
 $ python -m venv .venv
 $ source .venv/bin/activate
-$ python -m pip install iree-compiler iree-runtime
 $ python -m pip install -r iree_tests/requirements.txt
+```
+
+To use `iree-compile` and `iree-run-module` from Python packages:
+
+```bash
+$ python -m pip install iree-compiler iree-runtime
+```
+
+To use local versions of `iree-compile` and `iree-run-module`, put them on your
+`$PATH` ahead of your `.venv/Scripts` directory:
+
+```bash
+$ export PATH=path/to/iree-build;$PATH
 ```
 
 ### Running pytest
 
-Run tests (either run from `iree_tests` dir or pass as a positional arg):
+Run tests:
 
-```shell
+```bash
 $ pytest iree_tests
+```
+
+Run tests with parallelism:
+
+```bash
+$ pytest iree_tests -n auto
 ```
 
 ### Debugging pytest
 
 Collect tests (but do not run them):
 
-```shell
+```bash
 $ pytest iree_tests --collect-only
 
 ================================================== test session starts ================================================== platform win32 -- Python 3.11.2, pytest-8.0.2, pluggy-1.4.0
@@ -160,6 +178,6 @@ collected 3 items
 Run a subset of tests (see
 [Specifying which tests to run](https://docs.pytest.org/en/8.0.x/how-to/usage.html#specifying-which-tests-to-run)):
 
-```shell
+```bash
 $ pytest iree_tests -k "_add"
 ```

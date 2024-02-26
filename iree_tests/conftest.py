@@ -156,7 +156,7 @@ class IreeCompileRunItem(pytest.Item):
         return super().repr_failure(excinfo)
 
     def reportinfo(self):
-        return self.path, 0, f"IREE compile: {self.name}"
+        return self.path, 0, f"IREE compile and run: {self.name}"
 
 
 class IreeCompileException(Exception):
