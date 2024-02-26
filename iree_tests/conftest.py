@@ -87,19 +87,19 @@ class MlirFile(pytest.File):
             )
             expect_run_success = test_name not in config["expected_run_failures"]
             skip_run = test_name in config["skip_run_tests"]
-
+            config_name = config["config_name"]
             spec = IreeCompileAndRunTestSpec(
                 test_directory=test_directory,
                 input_mlir_name=self.path.name,
                 data_flagfile_name=test_data_flagfile_name,
-                config_name=config["config_name"],
+                config_name=config_name,
                 iree_compile_flags=config["iree_compile_flags"],
                 iree_run_module_flags=config["iree_run_module_flags"],
                 expect_compile_success=expect_compile_success,
                 expect_run_success=expect_run_success,
                 skip_run=skip_run,
             )
-            yield IreeCompileRunItem.from_parent(self, name=test_name, spec=spec)
+            yield IreeCompileRunItem.from_parent(self, name=config_name, spec=spec)
 
 
 class IreeCompileRunItem(pytest.Item):
@@ -153,10 +153,12 @@ class IreeCompileRunItem(pytest.Item):
         """Called when self.runtest() raises an exception."""
         if isinstance(excinfo.value, (IreeCompileException, IreeRunException)):
             return "\n".join(excinfo.value.args)
+        # TODO(scotttodd): XFAIL tests spew a ton of logs here when run with `pytest -rA`. Fix?
         return super().repr_failure(excinfo)
 
     def reportinfo(self):
-        return self.path, 0, f"IREE compile and run: {self.name}"
+        display_name = f"{self.path.parent.name}::{self.name}"
+        return self.path, 0, f"IREE compile and run: {display_name}"
 
 
 class IreeCompileException(Exception):
@@ -185,6 +187,11 @@ class IreeRunException(Exception):
     ):
         # iree-run-module sends output to stdout, not stderr
         try:
+            errs = process.stderr.decode("utf-8")
+        except:
+            errs = str(process.stderr)  # Decode error or other: best we can do.
+
+        try:
             outs = process.stdout.decode("utf-8")
         except:
             outs = str(process.stdout)  # Decode error or other: best we can do.
@@ -192,6 +199,7 @@ class IreeRunException(Exception):
         super().__init__(
             f"Error invoking iree-run-module\n"
             f"Error code: {process.returncode}\n"
+            f"Stderr diagnostics:\n{errs}\n"
             f"Stdout diagnostics:\n{outs}\n"
             f"Compiled with:\n"
             f"  cd {cwd} && {' '.join(compile_args)}\n\n"
@@ -243,6 +251,7 @@ if not _iree_test_config_files:
     REPO_ROOT = THIS_DIR.parent
     _iree_test_config_files = [
         REPO_ROOT / "iree_tests/configs/config_cpu.json",
+        # REPO_ROOT / "iree_tests/configs/config_gpu_vulkan.json",
     ]
 
 for config_file in _iree_test_config_files:
