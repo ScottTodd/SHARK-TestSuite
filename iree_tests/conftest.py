@@ -6,7 +6,8 @@
 
 from dataclasses import dataclass
 from pathlib import Path
-import json
+from typing import List
+import pyjson5
 import os
 import pytest
 import subprocess
@@ -14,17 +15,37 @@ import subprocess
 
 @dataclass(frozen=True)
 class IreeCompileAndRunTestSpec:
-    """Spec for an IREE compilation test."""
+    """Specification for an IREE "compile and run" test."""
 
-    input_mlir_path: Path
-    data_flagfile_path: Path
+    # Directory where test input files are located.
+    test_directory: Path
 
+    # Name of input MLIR file in a format accepted by IREE (e.g. torch, tosa, or linalg dialect)
+    input_mlir_name: str
+
+    # Name of flagfile in the same directory as the input MLIR, containing flags like:
+    #   --input=@input_0.npy
+    #   --expected_output=@output_0.npy
+    data_flagfile_name: str
+
+    # Name of the test configuration, e.g. "cpu".
+    # This will be used in generated files and test case names.
     config_name: str
-    iree_compile_flags: str
-    iree_run_module_flags: str
 
+    # Flags to pass to `iree-compile`, e.g. ["--iree-hal-target-backends=llvm-cpu"].
+    iree_compile_flags: List[str]
+
+    # Flags to pass to `iree-run-module`, e.g. ["--device=local-task"].
+    # These will be passed in addition to `--flagfile={data_flagfile_name}`.
+    iree_run_module_flags: List[str]
+
+    # True if compilation is expected to succeed. If false, the test will be marked XFAIL.
     expect_compile_success: bool
+
+    # True if running is expected to succeed. If false, the test will be marked XFAIL.
     expect_run_success: bool
+
+    # True to only compile the test and skip running.
     skip_run: bool
 
 
@@ -34,14 +55,25 @@ def pytest_collect_file(parent, file_path):
 
 
 class MlirFile(pytest.File):
+    """Collector for MLIR files accompanied by input/output."""
 
     def collect(self):
-        test_name = self.path.parent.name
+        # Expected directory structure:
+        #   path/to/test_some_ml_operator/
+        #     - model.mlir
+        #     - test_data_flags.txt
+        #   path/to/test_some_ml_model/
+        #     ...
+
+        test_directory = self.path.parent
+        test_name = test_directory.name
 
         # Note: this could be a glob() if we want to support multiple
         # input/output test cases per test folder.
-        test_data_flagfile_path = self.path.parent / "test_data_flags.txt"
-        if not test_data_flagfile_path.exists():
+        test_data_flagfile_name = "test_data_flags.txt"
+        if not (self.path.parent / test_data_flagfile_name).exists():
+            # TODO(scotttodd): support just compiling but not testing by omitting
+            #   data flags? May need another config file next to the .mlir.
             print(f"Missing test_data_flags.txt for test '{test_name}'")
             return []
 
@@ -57,8 +89,9 @@ class MlirFile(pytest.File):
             skip_run = test_name in config["skip_run_tests"]
 
             spec = IreeCompileAndRunTestSpec(
-                input_mlir_path=self.path,
-                data_flagfile_path=test_data_flagfile_path,
+                test_directory=test_directory,
+                input_mlir_name=self.path.name,
+                data_flagfile_name=test_data_flagfile_name,
                 config_name=config["config_name"],
                 iree_compile_flags=config["iree_compile_flags"],
                 iree_run_module_flags=config["iree_run_module_flags"],
@@ -70,15 +103,25 @@ class MlirFile(pytest.File):
 
 
 class IreeCompileRunItem(pytest.Item):
+    """Test invocation item for an IREE compile + run test case."""
+
     spec: IreeCompileAndRunTestSpec
 
     def __init__(self, spec, **kwargs):
         super().__init__(**kwargs)
         self.spec = spec
 
-        # TODO(scotttodd): output to a temp path
+        # TODO(scotttodd): swap cwd for a temp path?
+        self.test_cwd = self.spec.test_directory
         vmfb_name = f"model_{self.spec.config_name}.vmfb"
-        self.compiled_model_path = self.spec.input_mlir_path.parent / vmfb_name
+
+        self.compile_args = ["iree-compile", str(self.spec.input_mlir_name)]
+        self.compile_args.extend(self.spec.iree_compile_flags)
+        self.compile_args.extend(["-o", str(vmfb_name)])
+
+        self.run_args = ["iree-run-module", f"--module={vmfb_name}"]
+        self.run_args.extend(self.spec.iree_run_module_flags)
+        self.run_args.append(f"--flagfile={self.spec.data_flagfile_name}")
 
     def runtest(self):
         # First test compilation...
@@ -97,36 +140,18 @@ class IreeCompileRunItem(pytest.Item):
         self.test_run()
 
     def test_compile(self):
-        exec_args = [
-            "iree-compile",
-            str(self.spec.input_mlir_path),
-            "-o",
-            str(self.compiled_model_path),
-        ]
-        exec_args.extend(self.spec.iree_compile_flags)
-        process = subprocess.run(exec_args, capture_output=True)
-        if process.returncode != 0:
-            raise IreeCompileException(process)
+        proc = subprocess.run(self.compile_args, capture_output=True, cwd=self.test_cwd)
+        if proc.returncode != 0:
+            raise IreeCompileException(proc, self.test_cwd)
 
     def test_run(self):
-        exec_args = [
-            "iree-run-module",
-            f"--module={self.compiled_model_path}",
-            f"--flagfile={self.spec.data_flagfile_path}",
-        ]
-        exec_args.extend(self.spec.iree_run_module_flags)
-        # TODO(scotttodd): swap cwd for a temp path?
-        process = subprocess.run(
-            exec_args, capture_output=True, cwd=self.spec.data_flagfile_path.parent
-        )
-        if process.returncode != 0:
-            raise IreeRunException(process)
+        proc = subprocess.run(self.run_args, capture_output=True, cwd=self.test_cwd)
+        if proc.returncode != 0:
+            raise IreeRunException(proc, self.test_cwd, self.compile_args)
 
     def repr_failure(self, excinfo):
         """Called when self.runtest() raises an exception."""
-        if isinstance(excinfo.value, IreeCompileException):
-            return "\n".join(excinfo.value.args)
-        if isinstance(excinfo.value, IreeRunException):
+        if isinstance(excinfo.value, (IreeCompileException, IreeRunException)):
             return "\n".join(excinfo.value.args)
         return super().repr_failure(excinfo)
 
@@ -137,7 +162,7 @@ class IreeCompileRunItem(pytest.Item):
 class IreeCompileException(Exception):
     """Compiler exception that preserves the command line and error output."""
 
-    def __init__(self, process: subprocess.CompletedProcess):
+    def __init__(self, process: subprocess.CompletedProcess, cwd: str):
         try:
             errs = process.stderr.decode("utf-8")
         except:
@@ -147,26 +172,31 @@ class IreeCompileException(Exception):
             f"Error invoking iree-compile\n"
             f"Error code: {process.returncode}\n"
             f"Stderr diagnostics:\n{errs}\n\n"
-            f"Invoked with:\n {' '.join(process.args)}\n\n"
+            f"Invoked with:\n"
+            f"  cd {cwd} && {' '.join(process.args)}\n\n"
         )
 
 
 class IreeRunException(Exception):
     """Runtime exception that preserves the command line and error output."""
 
-    def __init__(self, process: subprocess.CompletedProcess):
+    def __init__(
+        self, process: subprocess.CompletedProcess, cwd: str, compile_args: List[str]
+    ):
+        # iree-run-module sends output to stdout, not stderr
         try:
-            errs = process.stderr.decode("utf-8")
+            outs = process.stdout.decode("utf-8")
         except:
-            errs = str(process.stderr)  # Decode error or other: best we can do.
+            outs = str(process.stdout)  # Decode error or other: best we can do.
 
-        # TODO(scotttodd): log CWD as part of the reproducer
-        #   (flagfiles use relative paths like `@input_0.npy`)
         super().__init__(
             f"Error invoking iree-run-module\n"
             f"Error code: {process.returncode}\n"
-            f"Stderr diagnostics:\n{errs}\n\n"
-            f"Invoked with:\n {' '.join(process.args)}\n\n"
+            f"Stdout diagnostics:\n{outs}\n"
+            f"Compiled with:\n"
+            f"  cd {cwd} && {' '.join(compile_args)}\n\n"
+            f"Run with:\n"
+            f"  cd {cwd} && {' '.join(process.args)}\n\n"
         )
 
 
@@ -195,9 +225,13 @@ class IreeRunException(Exception):
 #     "expected_run_failures": ["test_add"],
 #   }
 #
+# TODO(scotttodd): expand schema with more flexible include_tests/exclude_tests fields.
+#   * One use case is wanting to run only a small, controlled subset of tests, without needing to
+#     manually exclude any new tests that might be added in the future.
+#
 # First check for the `IREE_TEST_CONFIG_FILES` environment variable. If defined,
 # this should point to a semicolon-delimited list of config file paths, e.g.
-# `export IREE_TEST_CONFIG_FILES=~/iree/config_cpu.json;~/iree/config_gpu.json`.
+# `export IREE_TEST_CONFIG_FILES=/iree/config_cpu.json;/iree/config_gpu.json`.
 _iree_test_configs = []
 _iree_test_config_files = [
     config for config in os.getenv("IREE_TEST_CONFIG_FILES", "").split(";") if config
@@ -213,4 +247,4 @@ if not _iree_test_config_files:
 
 for config_file in _iree_test_config_files:
     with open(config_file) as f:
-        _iree_test_configs.append(json.load(f))
+        _iree_test_configs.append(pyjson5.load(f))
