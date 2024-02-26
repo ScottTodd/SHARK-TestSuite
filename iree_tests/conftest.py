@@ -131,15 +131,37 @@ class IreeCompileException(Exception):
         )
 
 
-# TODO(scotttodd): move this into a function? Some way to share state across
-#     pytest functions?
+# TODO(scotttodd): move this setup code into a (scoped) function?
+#   Is there some way to share state across pytest functions?
+
+# Load a list of configuration files following this schema:
+#   {
+#     "config_name": str,
+#     "iree_compile_flags": list of str,
+#     "iree_run_module_flags": list of str,
+#     "expected_compile_failures": list of str,
+#     "expected_run_failures": list of str
+#   }
+#
+# For example, to test the on CPU with the `llvm-cpu`` backend on the `local-task` device:
+#   {
+#     "config_name": "cpu",
+#     "iree_compile_flags": ["--iree-hal-target-backends=llvm-cpu"],
+#     "iree_run_module_flags": ["--device=local-task"],
+#     "expected_compile_failures": ["test_abs"],
+#     "expected_run_failures": ["test_add"],
+#   }
+#
+# First check for the `IREE_TEST_CONFIG_FILES` environment variable. If defined,
+# this should point to a semicolon-delimited list of config file paths, e.g.
+# `export IREE_TEST_CONFIG_FILES=~/iree/config_cpu.json;~/iree/config_gpu.json`.
 _iree_test_configs = []
 _iree_test_config_files = [
     config for config in os.getenv("IREE_TEST_CONFIG_FILES", "").split(";") if config
 ]
 
+# If no config files were specified via the environment variable, default to in-tree config files.
 if not _iree_test_config_files:
-    # Default to in-tree config files.
     THIS_DIR = Path(__file__).parent
     REPO_ROOT = THIS_DIR.parent
     _iree_test_config_files = [

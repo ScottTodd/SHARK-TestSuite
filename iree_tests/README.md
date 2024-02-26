@@ -156,3 +156,10 @@ collected 3 items
 
 ============================================== 3 tests collected in 1.67s ===============================================
 ```
+
+Run a subset of tests (see
+[Specifying which tests to run](https://docs.pytest.org/en/8.0.x/how-to/usage.html#specifying-which-tests-to-run)):
+
+```shell
+$ pytest iree_tests -k "_add"
+```
