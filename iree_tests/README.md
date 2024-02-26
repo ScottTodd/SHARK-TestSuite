@@ -109,3 +109,50 @@ folders like [`./onnx/node/generated/`](./onnx/node/generated/).
 
 The 'node' tests are for individual ONNX operators. The 'light', 'real',
 'simple', and other test suites may also be interesting.
+
+## Working with pytest
+
+Common venv setup with deps:
+
+```shell
+$ python -m venv .venv
+$ source .venv/bin/activate
+$ python -m pip install iree-compiler iree-runtime
+$ python -m pip install -r iree_tests/requirements.txt
+```
+
+### Running pytest
+
+Run tests (either run from `iree_tests` dir or pass as a positional arg):
+
+```shell
+$ pytest iree_tests
+```
+
+### Debugging pytest
+
+Collect tests (but do not run them):
+
+```shell
+$ pytest iree_tests --collect-only
+
+================================================== test session starts ================================================== platform win32 -- Python 3.11.2, pytest-8.0.2, pluggy-1.4.0
+rootdir: D:\dev\projects\SHARK-TestSuite\iree_tests
+collecting ...
+collected 3 items
+
+<Dir iree_tests>
+  <Dir onnx>
+    <Dir basic>
+      <Dir test_abs>
+        <MlirFile model.mlir>
+          <IreeCompileRunItem test_abs>
+      <Dir test_acos>
+        <MlirFile model.mlir>
+          <IreeCompileRunItem test_acos>
+      <Dir test_add>
+        <MlirFile model.mlir>
+          <IreeCompileRunItem test_add>
+
+============================================== 3 tests collected in 1.67s ===============================================
+```
