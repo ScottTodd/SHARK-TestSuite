@@ -141,7 +141,7 @@ _iree_test_config_files = [
 if not _iree_test_config_files:
     # Default to in-tree config files.
     THIS_DIR = Path(__file__).parent
-    REPO_ROOT = THIS_DIR.parent.parent.parent
+    REPO_ROOT = THIS_DIR.parent
     _iree_test_config_files = [
         REPO_ROOT / "iree_tests/configs/config_cpu.json",
     ]
