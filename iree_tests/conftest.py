@@ -11,11 +11,7 @@ import os
 import pytest
 import subprocess
 
-from pprint import pprint  # for debugging
 
-
-# TODO(scotttodd): split into 'compile' -> 'run', with a dependency?
-# TODO(scotttodd): or have the config files choose what to do?
 @dataclass(frozen=True)
 class IreeCompileAndRunTestSpec:
     """Spec for an IREE compilation test."""
@@ -34,14 +30,12 @@ class IreeCompileAndRunTestSpec:
 
 def pytest_collect_file(parent, file_path):
     if file_path.name.endswith("model.mlir"):
-        # print(f"Found model.mlir at '{file_path.parent.name}'")
         return MlirFile.from_parent(parent, path=file_path)
 
 
 class MlirFile(pytest.File):
-    def collect(self):
-        # print(f"  MlirFile with path: '{self.path}'")
 
+    def collect(self):
         test_name = self.path.parent.name
 
         # Note: this could be a glob() if we want to support multiple
@@ -87,9 +81,6 @@ class IreeCompileRunItem(pytest.Item):
         self.compiled_model_path = self.spec.input_mlir_path.parent / vmfb_name
 
     def runtest(self):
-        # print("Running test with spec:")
-        # pprint(self.spec)
-
         # First test compilation...
         if not self.spec.expect_compile_success:
             pytest.xfail("Expected compilation to fail")
