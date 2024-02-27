@@ -34,11 +34,13 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: "Setup Python venv"
+        run: python3 -m venv ${VENV_DIR}
+
       # TODO(scotttodd): swap this with workflow artifact downloads
       # TODO(scotttodd): make this configurable with workflow inputs
       - name: "Installing IREE nightly release Python packages"
         run: |
-          python3 -m venv ${VENV_DIR}
           source ${VENV_DIR}/bin/activate
           python3 -m pip install \
             --find-links https://iree.dev/pip-release-links.html \
@@ -46,57 +48,12 @@ jobs:
             iree-compiler \
             iree-runtime
 
-      # TODO(scotttodd): replace everything below here with pytest calls
-
-      - name: "Print baseline test results"
-        run: |
-          echo -e "\n========================================================="
-          echo -e "Baseline compile failures:"
-          cat iree_tests/onnx/node/compile_failures.txt
-          echo -e "\n========================================================="
-
-          echo -e "\n========================================================="
-          echo -e "Baseline compile successes:"
-          cat iree_tests/onnx/node/compile_successes.txt
-          echo -e "\n========================================================="
-
-          echo -e "\n========================================================="
-          echo -e "Baseline run failures:"
-          cat iree_tests/onnx/node/run_failures.txt
-          echo -e "\n========================================================="
-
-          echo -e "\n========================================================="
-          echo -e "Baseline run successes:"
-          cat iree_tests/onnx/node/run_successes.txt
-          echo -e "\n========================================================="
-
-      - name: "Test compilation"
+      - name: "Installing other Python requirements"
         run: |
           source ${VENV_DIR}/bin/activate
-          python iree_tests/compile_tests.py
-      - name: "Test running"
+          python3 -m pip install -r iree_tests/requirements.txt
+
+      - name: "Testing with pytest"
         run: |
           source ${VENV_DIR}/bin/activate
-          python iree_tests/run_tests.py
-
-      - name: "Print test results"
-        run: |
-          echo -e "\n========================================================="
-          echo -e "Tested compile failures:"
-          cat iree_tests/onnx/node/compile_failures.txt
-          echo -e "\n========================================================="
-
-          echo -e "\n========================================================="
-          echo -e "Tested compile successes:"
-          cat iree_tests/onnx/node/compile_successes.txt
-          echo -e "\n========================================================="
-
-          echo -e "\n========================================================="
-          echo -e "Tested run failures:"
-          cat iree_tests/onnx/node/run_failures.txt
-          echo -e "\n========================================================="
-
-          echo -e "\n========================================================="
-          echo -e "Tested run successes:"
-          cat iree_tests/onnx/node/run_successes.txt
-          echo -e "\n========================================================="
+          pytest iree_tests -n auto -rpfE
